@@ -8,6 +8,7 @@ using ABI.CCK.Components;
 using ABI_RC.Core.Player;
 using ABI_RC.Systems.IK.SubSystems;
 using ABI_RC.Core.Networking.IO.Social;
+using ABI_RC.Systems.IK;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
 [assembly: MelonInfo(typeof(Koneko.LimbGrabber), "LimbGrabber", "1.0.0", "Exterrata")]
@@ -25,7 +26,7 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<bool> EnableHead = Category.CreateEntry<bool>("EnableHead", true);
     public static readonly MelonPreferences_Entry<bool> EnableHip = Category.CreateEntry<bool>("EnableHip", true);
     public static readonly MelonPreferences_Entry<bool> EnableRoot = Category.CreateEntry<bool>("EnableRoot", true);
-    public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.1f);
+    public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.15f);
 
     /*
     LeftHand = 0
@@ -52,12 +53,6 @@ public class LimbGrabber : MelonMod
         public Transform limb;
         public Transform Target;
         public Transform PreviousTarget;
-        public Limb(Limb limb)
-        {
-            this.limb = limb.limb;
-            Target = limb.Target;
-            PreviousTarget = limb.PreviousTarget;
-        }
     }
     public class Grabber
     {
@@ -216,13 +211,14 @@ public class Patches
         LimbGrabber.Grabbers.Add(grabber);
     }
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(CVRAvatar), "Start")]
-    public static void LimbSetup(CVRAvatar __instance)
+    [HarmonyPatch(typeof(BodySystem), "Calibrate")]
+    [HarmonyPatch(typeof(PlayerSetup), "SetupAvatar")]
+    public static void LimbSetup()
     {
-        if (__instance.gameObject.layer != 8) return;
+
         LimbGrabber.Limb limb = new LimbGrabber.Limb();
-        Animator animator = __instance.gameObject.GetComponent<Animator>();
-        IKSolverVR solver = __instance.gameObject.GetComponent<VRIK>().solver;
+        Animator animator = PlayerSetup.Instance._animator;
+        IKSolverVR solver = IKSystem.vrik.solver;
         LimbGrabber.IKSolver = solver;
 
         LimbGrabber.tracking[0] = BodySystem.TrackingLeftArmEnabled;
@@ -234,22 +230,22 @@ public class Patches
 
         limb.limb = animator.GetBoneTransform(HumanBodyBones.LeftHand);
         limb.PreviousTarget = solver.leftArm.target;
-        LimbGrabber.Limbs[0] = new LimbGrabber.Limb(limb);
+        LimbGrabber.Limbs[0] = limb;
         limb.limb = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
         limb.PreviousTarget = solver.leftLeg.target;
-        LimbGrabber.Limbs[1] = new LimbGrabber.Limb(limb);
+        LimbGrabber.Limbs[1] = limb;
         limb.limb = animator.GetBoneTransform(HumanBodyBones.RightHand);
         limb.PreviousTarget = solver.rightArm.target;
-        LimbGrabber.Limbs[2] = new LimbGrabber.Limb(limb);
+        LimbGrabber.Limbs[2] = limb;
         limb.limb = animator.GetBoneTransform(HumanBodyBones.RightFoot);
         limb.PreviousTarget = solver.rightLeg.target;
-        LimbGrabber.Limbs[3] = new LimbGrabber.Limb(limb);
+        LimbGrabber.Limbs[3] = limb;
         limb.limb = animator.GetBoneTransform(HumanBodyBones.Head);
         limb.PreviousTarget = solver.spine.headTarget;
-        LimbGrabber.Limbs[4] = new LimbGrabber.Limb(limb);
+        LimbGrabber.Limbs[4] = limb;
         limb.limb = animator.GetBoneTransform(HumanBodyBones.Hips);
         limb.PreviousTarget = solver.spine.pelvisTarget;
-        LimbGrabber.Limbs[5] = new LimbGrabber.Limb(limb);
+        LimbGrabber.Limbs[5] = limb;
         LimbGrabber.Initialized = true;
     }
 }
