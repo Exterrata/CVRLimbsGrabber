@@ -45,6 +45,8 @@ public class LimbGrabber : MelonMod
 
     public static IKSolverVR IKSolver;
 
+    public static bool Initialized;
+
     public struct Limb
     {
         public Transform limb;
@@ -91,6 +93,7 @@ public class LimbGrabber : MelonMod
 
     public override void OnUpdate()
     {
+        if (!Initialized) return;
         for (int i = 0; i < Limbs.Length; i++)
         {
             if (Limbs[i].Target == null)
@@ -247,5 +250,6 @@ public class Patches
         limb.limb = animator.GetBoneTransform(HumanBodyBones.Hips);
         limb.PreviousTarget = solver.spine.pelvisTarget;
         LimbGrabber.Limbs[5] = new LimbGrabber.Limb(limb);
+        LimbGrabber.Initialized = true;
     }
 }
