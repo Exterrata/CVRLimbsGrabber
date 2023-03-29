@@ -8,6 +8,8 @@ using ABI_RC.Core.Player;
 using ABI_RC.Core.Networking.IO.Social;
 using ABI_RC.Systems.IK.SubSystems;
 using ABI_RC.Systems.IK;
+using ABI.CCK.Components;
+using System.Linq;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
 [assembly: MelonInfo(typeof(Koneko.LimbGrabber), "LimbGrabber", "1.0.0", "Exterrata")]
@@ -28,27 +30,22 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.15f);
     public static readonly MelonPreferences_Entry<bool> Debug = Category.CreateEntry<bool>("Debug", true);
 
-    /*
-    LeftHand = 0
-    LeftFoot = 1
-    RightHand = 2
-    RightFoot = 3
-    Head = 4
-    Hip = 5
-    Root = 6
-    */
+//  LeftHand = 0
+//  LeftFoot = 1
+//  RightHand = 2
+//  RightFoot = 3
+//  Head = 4
+//  Hip = 5
+//  Root = 6
+    public static readonly string[] LimbNames = { "LeftHand", "LeftFoot", "RightHand", "RightFoot", "Head", "Hip", "Root" };
     public static MelonPreferences_Entry<bool>[] enabled;
     public static bool[] tracking;
-
     public static Limb[] Limbs;
-
-    public static List<Grabber> Grabbers;
+    public static Dictionary<int, Grabber> Grabbers;
 
     public static IKSolverVR IKSolver;
-
     public static bool Initialized;
-
-    public static readonly string[] LimbNames = { "LeftHand", "LeftFoot", "RightHand", "RightFoot", "Head", "Hip", "Root" };
+    public int count = 0;
 
     public struct Limb
     {
@@ -56,22 +53,26 @@ public class LimbGrabber : MelonMod
         public Transform Target;
         public Transform PreviousTarget;
     }
+
     public class Grabber
     {
-        public Transform transform;
-        public Animator animator;
-        public int parameter;
-        public bool Friend;
-        public bool WasGrabbing;
-        public int Limb;
+        public Transform grabber;
+        public bool grabbing;
+        public int limb;
+        public Grabber(Transform grabber, bool grabbing, int limb)
+        {
+            this.grabber = grabber;
+            this.grabbing = grabbing;
+            this.limb = limb;
+        }
     }
 
     public override void OnInitializeMelon()
     {
         MelonLogger.Msg("Starting");
         Limbs = new Limb[7];
-        Grabbers = new List<Grabber>();
         tracking = new bool[7];
+        Grabbers = new Dictionary<int, Grabber>();
         for (int i = 0;i < 7; i++)
         {
             Limbs[i].Target = new GameObject().transform;
@@ -95,62 +96,66 @@ public class LimbGrabber : MelonMod
         {
             if (Limbs[i].Target == null)
             {
-                if (Debug.Value) MelonLogger.Msg("Limb " + LimbNames[i] + " was destroyed. regenerating"); 
+                if (Debug.Value) MelonLogger.Msg("Limb " + LimbNames[i] + " was destroyed. regenerating");
                 Limbs[i].Target = new GameObject("LimbGrabberTarget").transform;
                 SetTarget(i, Limbs[i].PreviousTarget);
                 if (!tracking[i]) SetTracking(i, false);
             }
         }
-        for (int i = 0; i < Grabbers.Count; i++)
+        if (count == 1000)
         {
-            if (Grabbers[i].transform == null) 
+            List<int> remove = new List<int>();
+            count = 0;
+            for (int i = 0; i < Grabbers.Count; i++)
             {
-                Grabbers.Remove(Grabbers[i]);
-                continue;
+                KeyValuePair<int, Grabber> grabber = Grabbers.ElementAt(i);
+                if (grabber.Value.grabber == null)
+                {
+                    if (Debug.Value) MelonLogger.Msg("Grabber no long exists. removing");
+                    Grabbers.Remove(grabber.Key);
+                }
             }
-            if (Friend.Value && !Grabbers[i].Friend) continue;
-            if ((int)Grabbers[i].animator.GetFloat(Grabbers[i].parameter) == 1 && !Grabbers[i].WasGrabbing)
+        }
+        count++;
+    }
+
+    public static void Grab(int id, Transform parent)
+    {
+        if (!Enabled.Value) return;
+        if (Debug.Value) MelonLogger.Msg("grab was detected");
+        int closest = 0;
+        float distance = float.PositiveInfinity;
+        for (int i = 0; i < 6; i++)
+        {
+            float dist = Vector3.Distance(parent.position, Limbs[i].limb.position);
+            if (dist < distance)
             {
-                if (Debug.Value) MelonLogger.Msg("grab was detected");
-                int closest = 0;
-                float distance = float.PositiveInfinity;
-                for (int j = 0; j < 6; j++)
-                {
-                    float dist = Vector3.Distance(Grabbers[i].transform.position, Limbs[j].limb.position);
-                    if(dist < distance)
-                    {
-                        closest = j;
-                        distance = dist;
-                    }
-                }
-                if (distance < Distance.Value)
-                {
-                    if (Debug.Value) MelonLogger.Msg("limb " + Limbs[closest].limb.name + " was grabbed by " + Grabbers[i].transform.name);
-                    Limbs[closest].Target.position = Limbs[closest].limb.position;
-                    Limbs[closest].Target.rotation = Limbs[closest].limb.rotation;
-                    Limbs[closest].Target.parent = Grabbers[i].transform;
-                    Grabbers[i].Limb = closest;
-                    SetTarget(closest, Limbs[closest].Target);
-                    SetTracking(closest, true);
-                }
-                Grabbers[i].WasGrabbing = true;
+                distance = dist;
+                closest = i;
             }
-            else if ((int)Grabbers[i].animator.GetFloat(Grabbers[i].parameter) != 1 && Grabbers[i].WasGrabbing)
-            {
-                if (Grabbers[i].Limb != -1)
-                {
-                    int limb = Grabbers[i].Limb;
-                    if (Debug.Value) MelonLogger.Msg("limb " + Limbs[limb].limb.name + " was released by " + Grabbers[i].transform.name);
-                    Grabbers[i].Limb = -1;
-                    SetTarget(limb, Limbs[limb].PreviousTarget);
-                    if (!tracking[limb]) SetTracking(limb, false);
-                }
-                Grabbers[i].WasGrabbing = false;
-            }
+        }
+        if (distance < Distance.Value)
+        {
+            Grabbers[id].limb = closest;
+
+            if (Debug.Value) MelonLogger.Msg("limb " + Limbs[closest].limb.name + " was grabbed by " + parent.name);
+            Limbs[closest].Target.position = Limbs[closest].limb.position;
+            Limbs[closest].Target.rotation = Limbs[closest].limb.rotation;
+            Limbs[closest].Target.parent = parent;
+            SetTarget(closest, Limbs[closest].Target);
+            SetTracking(closest, true);
         }
     }
 
-    public void SetTarget(int index, Transform Target)
+    public static void Release(int id)
+    {
+        int grabber = Grabbers[id].limb;
+        if (Debug.Value) MelonLogger.Msg("limb " + Limbs[grabber].limb.name + " was released by " + Grabbers[id].grabber.name);
+        SetTarget(grabber, Limbs[grabber].PreviousTarget);
+        if (!tracking[grabber]) SetTracking(grabber, false);
+    }
+
+    public static void SetTarget(int index, Transform Target)
     {
         switch (index)
         {
@@ -175,7 +180,7 @@ public class LimbGrabber : MelonMod
         }
     }
 
-    public void SetTracking(int index, bool value)
+    public static void SetTracking(int index, bool value)
     {
         switch (index)
         {
@@ -203,24 +208,59 @@ public class LimbGrabber : MelonMod
 public class Patches
 {
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(PuppetMaster), "AvatarInstantiated")]
-    public static void GrabberSetup(PlayerDescriptor ____playerDescriptor, Animator ____animator)
+    [HarmonyPatch(typeof(PuppetMaster), "Update")]
+    public static void UpdateGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
     {
-        LimbGrabber.Grabber grabber = new LimbGrabber.Grabber();
-        grabber.Friend = Friends.FriendsWith(____playerDescriptor.ownerId);
-        grabber.animator = ____animator;
-        grabber.Limb = -1;
-        grabber.transform = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
-        grabber.parameter = Animator.StringToHash("GestureLeft");
-        LimbGrabber.Grabbers.Add(grabber);
-        grabber = new LimbGrabber.Grabber();
-        grabber.Friend = Friends.FriendsWith(____playerDescriptor.ownerId);
-        grabber.animator = ____animator;
-        grabber.Limb = -1;
-        grabber.transform = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
-        grabber.parameter = Animator.StringToHash("GestureRight");
-        LimbGrabber.Grabbers.Add(grabber);
+        if (____distance > 10 || !Friends.FriendsWith(____playerDescriptor.ownerId) && LimbGrabber.Friend.Value) return;
+
+        Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
+        Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
+
+        int leftid = LeftHand.GetInstanceID();
+        int rightid = RightHand.GetInstanceID();
+
+        bool LeftExists = LimbGrabber.Grabbers.TryGetValue(leftid, out LimbGrabber.Grabber LeftGrab);
+        if (!LeftExists)
+        {
+            if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
+            LeftGrab = new LimbGrabber.Grabber(LeftHand, false, -1);
+            LimbGrabber.Grabbers.Add(leftid, LeftGrab);
+        }
+
+        bool RightExists = LimbGrabber.Grabbers.TryGetValue(rightid, out LimbGrabber.Grabber RightGrab);
+        if (!RightExists)
+        {
+            if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
+            RightGrab = new LimbGrabber.Grabber(RightHand, false, -1);
+            LimbGrabber.Grabbers.Add(rightid, RightGrab);
+        }
+
+        bool grabLeft = LeftGrab.grabbing;
+        bool grabRight = RightGrab.grabbing;
+
+        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft == 1 && !grabLeft || ____playerAvatarMovementDataCurrent.LeftMiddleCurl > 0.5 && !grabLeft)
+        {
+            LimbGrabber.Grab(leftid, LeftHand);
+            grabLeft = true;
+        } else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft != 1 && ____playerAvatarMovementDataCurrent.LeftMiddleCurl < 0.5 && grabLeft)
+        {
+            LimbGrabber.Release(leftid);
+            grabLeft = false;
+        }
+        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight == 1 && !grabRight || ____playerAvatarMovementDataCurrent.RightMiddleCurl > 0.5 && !grabRight)
+        {
+            LimbGrabber.Grab(rightid, RightHand);
+            grabRight = true;
+        } else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight != 1 && ____playerAvatarMovementDataCurrent.RightMiddleCurl < 0.5 && grabRight)
+        {
+            LimbGrabber.Release(rightid);
+            grabRight = false;
+        }
+
+        LimbGrabber.Grabbers[leftid].grabbing = grabLeft;
+        LimbGrabber.Grabbers[rightid].grabbing = grabRight;
     }
+
     [HarmonyPostfix]
     [HarmonyPatch(typeof(BodySystem), "Calibrate")]
     [HarmonyPatch(typeof(PlayerSetup), "SetupAvatar")]
