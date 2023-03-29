@@ -1,13 +1,12 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using System;
+using UnityEngine;
 using MelonLoader;
 using HarmonyLib;
-using System;
-using System.Collections.Generic;
 using RootMotion.FinalIK;
-using ABI.CCK.Components;
 using ABI_RC.Core.Player;
-using ABI_RC.Systems.IK.SubSystems;
 using ABI_RC.Core.Networking.IO.Social;
+using ABI_RC.Systems.IK.SubSystems;
 using ABI_RC.Systems.IK;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
@@ -27,6 +26,7 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<bool> EnableHip = Category.CreateEntry<bool>("EnableHip", true);
     public static readonly MelonPreferences_Entry<bool> EnableRoot = Category.CreateEntry<bool>("EnableRoot", true);
     public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.15f);
+    public static readonly MelonPreferences_Entry<bool> Debug = Category.CreateEntry<bool>("Debug", true);
 
     /*
     LeftHand = 0
@@ -47,6 +47,8 @@ public class LimbGrabber : MelonMod
     public static IKSolverVR IKSolver;
 
     public static bool Initialized;
+
+    public static readonly string[] LimbNames = { "LeftHand", "LeftFoot", "RightHand", "RightFoot", "Head", "Hip", "Root" };
 
     public struct Limb
     {
@@ -72,7 +74,7 @@ public class LimbGrabber : MelonMod
         tracking = new bool[7];
         for (int i = 0;i < 7; i++)
         {
-            Limbs[i].limb = new GameObject().transform;
+            Limbs[i].Target = new GameObject().transform;
         }
         enabled = new MelonPreferences_Entry<bool>[7] {
             EnableLeftHand,
@@ -88,11 +90,12 @@ public class LimbGrabber : MelonMod
 
     public override void OnUpdate()
     {
-        if (!Initialized) return;
+        if (!Initialized || !Enabled.Value) return;
         for (int i = 0; i < Limbs.Length; i++)
         {
             if (Limbs[i].Target == null)
             {
+                if (Debug.Value) MelonLogger.Msg("Limb " + LimbNames[i] + " was destroyed. regenerating"); 
                 Limbs[i].Target = new GameObject("LimbGrabberTarget").transform;
                 SetTarget(i, Limbs[i].PreviousTarget);
                 if (!tracking[i]) SetTracking(i, false);
@@ -106,35 +109,43 @@ public class LimbGrabber : MelonMod
                 continue;
             }
             if (Friend.Value && !Grabbers[i].Friend) continue;
-            for (int j = 0; j < 6; j++)
+            if ((int)Grabbers[i].animator.GetFloat(Grabbers[i].parameter) == 1 && !Grabbers[i].WasGrabbing)
             {
-                if (enabled[j].Value)
+                if (Debug.Value) MelonLogger.Msg("grab was detected");
+                int closest = 0;
+                float distance = float.PositiveInfinity;
+                for (int j = 0; j < 6; j++)
                 {
-                    if ((int)Grabbers[i].animator.GetFloat(Grabbers[i].parameter) == 1 && !Grabbers[i].WasGrabbing)
+                    float dist = Vector3.Distance(Grabbers[i].transform.position, Limbs[j].limb.position);
+                    if(dist < distance)
                     {
-                        if(j == 5) Grabbers[i].WasGrabbing = true;
-                        //grab limb
-                        if (Vector3.Distance(Grabbers[i].transform.position, Limbs[j].limb.position) < Distance.Value && Grabbers[i].Limb == -1)
-                        {
-                            Limbs[j].Target.position = Limbs[j].limb.position;
-                            Limbs[j].Target.rotation = Limbs[j].limb.rotation;
-                            Limbs[j].Target.parent = Grabbers[i].transform;
-                            Grabbers[i].Limb = j;
-                            SetTarget(j, Limbs[j].Target);
-                            SetTracking(j, true);
-                        }
-                    } else if ((int)Grabbers[i].animator.GetFloat(Grabbers[i].parameter) != 1 && Grabbers[i].WasGrabbing)
-                    {
-                        //release limb
-                        if (j == 5) Grabbers[i].WasGrabbing = false;
-                        if (Grabbers[i].Limb == j)
-                        {
-                            Grabbers[i].Limb = -1;
-                            SetTarget(j, Limbs[j].PreviousTarget);
-                            if (!tracking[j]) SetTracking(j, false);
-                        }
+                        closest = j;
+                        distance = dist;
                     }
                 }
+                if (distance < Distance.Value)
+                {
+                    if (Debug.Value) MelonLogger.Msg("limb " + Limbs[closest].limb.name + " was grabbed by " + Grabbers[i].transform.name);
+                    Limbs[closest].Target.position = Limbs[closest].limb.position;
+                    Limbs[closest].Target.rotation = Limbs[closest].limb.rotation;
+                    Limbs[closest].Target.parent = Grabbers[i].transform;
+                    Grabbers[i].Limb = closest;
+                    SetTarget(closest, Limbs[closest].Target);
+                    SetTracking(closest, true);
+                }
+                Grabbers[i].WasGrabbing = true;
+            }
+            else if ((int)Grabbers[i].animator.GetFloat(Grabbers[i].parameter) != 1 && Grabbers[i].WasGrabbing)
+            {
+                if (Grabbers[i].Limb != -1)
+                {
+                    int limb = Grabbers[i].Limb;
+                    if (Debug.Value) MelonLogger.Msg("limb " + Limbs[limb].limb.name + " was released by " + Grabbers[i].transform.name);
+                    Grabbers[i].Limb = -1;
+                    SetTarget(limb, Limbs[limb].PreviousTarget);
+                    if (!tracking[limb]) SetTracking(limb, false);
+                }
+                Grabbers[i].WasGrabbing = false;
             }
         }
     }
@@ -215,10 +226,9 @@ public class Patches
     [HarmonyPatch(typeof(PlayerSetup), "SetupAvatar")]
     public static void LimbSetup()
     {
-
         LimbGrabber.Limb limb = new LimbGrabber.Limb();
         Animator animator = PlayerSetup.Instance._animator;
-        IKSolverVR solver = IKSystem.vrik.solver;
+        IKSolverVR solver = PlayerSetup.Instance._avatar.GetComponent<VRIK>().solver;
         LimbGrabber.IKSolver = solver;
 
         LimbGrabber.tracking[0] = BodySystem.TrackingLeftArmEnabled;
