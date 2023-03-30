@@ -22,9 +22,9 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<bool> EnableHip = Category.CreateEntry<bool>("EnableHip", true);
     public static readonly MelonPreferences_Entry<bool> EnableRoot = Category.CreateEntry<bool>("EnableRoot", true);
     public static readonly MelonPreferences_Entry<bool> PreserveMomentum = Category.CreateEntry<bool>("PreserveMomentum", true);
-    public static readonly MelonPreferences_Entry<bool> CameraFollow = Category.CreateEntry<bool>("CameraFollowHead", true);
+    public static readonly MelonPreferences_Entry<bool> CameraFollow = Category.CreateEntry<bool>("CameraFollowHead", false);
     public static readonly MelonPreferences_Entry<bool> Friend = Category.CreateEntry<bool>("FriendsOnly", true);
-    public static readonly MelonPreferences_Entry<bool> Debug = Category.CreateEntry<bool>("Debug", true);
+    public static readonly MelonPreferences_Entry<bool> Debug = Category.CreateEntry<bool>("Debug", false);
     public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.15f);
 
     //  LeftHand = 0
@@ -148,8 +148,8 @@ public class LimbGrabber : MelonMod
             if (!enabled[closest].Value) return;
             Grabbers[id].limb = closest;
             if (Debug.Value) MelonLogger.Msg("limb " + Limbs[closest].limb.name + " was grabbed by " + parent.name);
-            Limbs[closest].PositionOffset = parent.position - Limbs[closest].limb.position;
-            Limbs[closest].RotationOffset = Limbs[closest].limb.rotation;
+            Limbs[closest].PositionOffset = Quaternion.Inverse(parent.rotation) * (Limbs[closest].limb.position - parent.position);
+            Limbs[closest].RotationOffset = Quaternion.Inverse(parent.rotation) * Limbs[closest].limb.rotation;
             Limbs[closest].Parent = parent;
             Limbs[closest].Grabbed = true;
             SetTarget(closest, Limbs[closest].Target);
@@ -247,7 +247,7 @@ public class Patches
     [HarmonyPatch(typeof(PuppetMaster), "Update")]
     public static void UpdateGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
     {
-        if (____distance > 10 || !Friends.FriendsWith(____playerDescriptor.ownerId) && LimbGrabber.Friend.Value || !LimbGrabber.Initialized) return;
+        if (____distance > 10 || !Friends.FriendsWith(____playerDescriptor.ownerId) && LimbGrabber.Friend.Value || ____animator == null) return;
         
         Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
         Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
