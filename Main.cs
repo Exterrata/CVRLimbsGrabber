@@ -59,12 +59,10 @@ public class LimbGrabber : MelonMod
     public class Grabber
     {
         public Transform grabber;
-        public bool grabbing;
         public int limb;
         public Grabber(Transform grabber, bool grabbing, int limb)
         {
             this.grabber = grabber;
-            this.grabbing = grabbing;
             this.limb = limb;
         }
     }
@@ -83,6 +81,7 @@ public class LimbGrabber : MelonMod
             EnableHip,
             EnableRoot
         };
+        Patches.grabbing = new Dictionary<int, bool>();
         HarmonyInstance.PatchAll(typeof(Patches));
     }
 
@@ -120,7 +119,7 @@ public class LimbGrabber : MelonMod
         count++;
         for (int i = 0; i < Limbs.Length; i++)
         {
-            if (Limbs[i].Grabbed)
+            if (Limbs[i].Grabbed && Limbs[i].Parent != null)
             {
                 Vector3 offset = Limbs[i].Parent.rotation * Limbs[i].PositionOffset;
                 Limbs[i].Target.position = Limbs[i].Parent.position + offset;
@@ -161,6 +160,7 @@ public class LimbGrabber : MelonMod
     public static void Release(int id)
     {
         int grabber = Grabbers[id].limb;
+        if (grabber == -1) return;
         if (Debug.Value) MelonLogger.Msg("limb " + Limbs[grabber].limb.name + " was released by " + Grabbers[id].grabber.name);
         Limbs[grabber].Grabbed = false;
         SetTarget(grabber, Limbs[grabber].PreviousTarget);
@@ -219,60 +219,65 @@ public class LimbGrabber : MelonMod
 }
 public class Patches
 {
-    [HarmonyPostfix]
-    [HarmonyPatch(typeof(PuppetMaster), "Update")]
-    public static void UpdateGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
-    {
-        if (____distance > 10 || !Friends.FriendsWith(____playerDescriptor.ownerId) && LimbGrabber.Friend.Value) return;
+    public static Dictionary<int, bool> grabbing;
 
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(PuppetMaster), "AvatarInstantiated")]
+    public static void SetupGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
+    {
         Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
         Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
 
         int leftid = LeftHand.GetInstanceID();
         int rightid = RightHand.GetInstanceID();
 
-        bool LeftExists = LimbGrabber.Grabbers.TryGetValue(leftid, out LimbGrabber.Grabber LeftGrab);
-        if (!LeftExists)
+        if (!LimbGrabber.Grabbers.ContainsKey(leftid))
         {
             if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
-            LeftGrab = new LimbGrabber.Grabber(LeftHand, false, -1);
-            LimbGrabber.Grabbers.Add(leftid, LeftGrab);
+            LimbGrabber.Grabbers.Add(leftid, new LimbGrabber.Grabber(LeftHand, false, -1));
         }
-
-        bool RightExists = LimbGrabber.Grabbers.TryGetValue(rightid, out LimbGrabber.Grabber RightGrab);
-        if (!RightExists)
+        if (!LimbGrabber.Grabbers.ContainsKey(rightid))
         {
             if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
-            RightGrab = new LimbGrabber.Grabber(RightHand, false, -1);
-            LimbGrabber.Grabbers.Add(rightid, RightGrab);
+            LimbGrabber.Grabbers.Add(rightid, new LimbGrabber.Grabber(RightHand, false, -1));
         }
+    }
 
-        bool grabLeft = LeftGrab.grabbing;
-        bool grabRight = RightGrab.grabbing;
+        [HarmonyPostfix]
+    [HarmonyPatch(typeof(PuppetMaster), "Update")]
+    public static void UpdateGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
+    {
+        if (____distance > 10 || !Friends.FriendsWith(____playerDescriptor.ownerId) && LimbGrabber.Friend.Value || !LimbGrabber.Initialized) return;
+        
+        Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
+        Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
 
-        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft == 1 && !grabLeft || ____playerAvatarMovementDataCurrent.LeftMiddleCurl > 0.5 && !grabLeft)
+        int leftid = LeftHand.GetInstanceID();
+        int rightid = RightHand.GetInstanceID();
+
+        if(!grabbing.ContainsKey(leftid)) grabbing.Add(leftid, false);
+        if(!grabbing.ContainsKey(rightid)) grabbing.Add(rightid, false);
+
+        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft == 1 && !grabbing[leftid] || ____playerAvatarMovementDataCurrent.LeftMiddleCurl > 0.5 && !grabbing[leftid])
         {
             LimbGrabber.Grab(leftid, LeftHand);
-            grabLeft = true;
+            grabbing[leftid] = true;
         }
-        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft != 1 && ____playerAvatarMovementDataCurrent.LeftMiddleCurl < 0.5 && grabLeft)
+        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft != 1 && ____playerAvatarMovementDataCurrent.LeftMiddleCurl < 0.5 && grabbing[leftid])
         {
             LimbGrabber.Release(leftid);
-            grabLeft = false;
+            grabbing[leftid] = false;
         }
-        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight == 1 && !grabRight || ____playerAvatarMovementDataCurrent.RightMiddleCurl > 0.5 && !grabRight)
+        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight == 1 && !grabbing[rightid] || ____playerAvatarMovementDataCurrent.RightMiddleCurl > 0.5 && !grabbing[rightid])
         {
             LimbGrabber.Grab(rightid, RightHand);
-            grabRight = true;
+            grabbing[rightid] = true;
         }
-        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight != 1 && ____playerAvatarMovementDataCurrent.RightMiddleCurl < 0.5 && grabRight)
+        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight != 1 && ____playerAvatarMovementDataCurrent.RightMiddleCurl < 0.5 && grabbing[rightid])
         {
             LimbGrabber.Release(rightid);
-            grabRight = false;
+            grabbing[rightid] = false;
         }
-
-        LimbGrabber.Grabbers[leftid].grabbing = grabLeft;
-        LimbGrabber.Grabbers[rightid].grabbing = grabRight;
     }
 
     [HarmonyPostfix]
