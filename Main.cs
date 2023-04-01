@@ -2,11 +2,12 @@
 using System;
 using UnityEngine;
 using MelonLoader;
-using HarmonyLib;
 using RootMotion.FinalIK;
-using ABI_RC.Core.Player;
-using ABI_RC.Core.Networking.IO.Social;
 using ABI_RC.Systems.IK.SubSystems;
+using ABI_RC.Systems.MovementSystem;
+using ABI_RC.Core.Savior;
+using System.Reflection;
+using ABI_RC.Core.Util.Object_Behaviour;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
 [assembly: MelonInfo(typeof(Koneko.LimbGrabber), "LimbGrabber", "1.0.0", "Exterrata")]
@@ -25,8 +26,9 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<bool> CameraFollow = Category.CreateEntry<bool>("CameraFollowHead", false);
     public static readonly MelonPreferences_Entry<bool> Friend = Category.CreateEntry<bool>("FriendsOnly", true);
     public static readonly MelonPreferences_Entry<bool> Debug = Category.CreateEntry<bool>("Debug", false);
+    public static readonly MelonPreferences_Entry<float> VelocityMultiplier = Category.CreateEntry<float>("VelocityMultiplier", 1f);
+    public static readonly MelonPreferences_Entry<float> GravityMultiplier = Category.CreateEntry<float>("GravityMultiplier", 1f);
     public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.15f);
-
     //  LeftHand = 0
     //  LeftFoot = 1
     //  RightHand = 2
@@ -34,16 +36,23 @@ public class LimbGrabber : MelonMod
     //  Head = 4
     //  Hip = 5
     //  Root = 6
-    public static readonly string[] LimbNames = { "LeftHand", "LeftFoot", "RightHand", "RightFoot", "Head", "Hip", "Root" };
+    public static readonly string[] LimbNames = { "LeftHand", "LeftFoot", "RightHand", "RightFoot", "Head", "Hip"};
     public static MelonPreferences_Entry<bool>[] enabled;
     public static bool[] tracking;
     public static Limb[] Limbs;
     public static Dictionary<int, Grabber> Grabbers;
     public static Transform PlayerLocal;
-
+    public static Vector3 RootOffset;
+    public static Vector3 LastRootPosition;
+    public static Vector3 Velocity;
+    public static Vector3[] AverageVelocities;
+    public static int VelocityIndex;
+    public static GameObject Camera;
     public static IKSolverVR IKSolver;
+    public static FieldInfo Grounded;
     public static bool Initialized;
-    public int count = 0;
+    public static bool IsAirborn;
+    public static int count = 0;
 
     public struct Limb
     {
@@ -72,14 +81,14 @@ public class LimbGrabber : MelonMod
         MelonLogger.Msg("Starting");
         tracking = new bool[6];
         Grabbers = new Dictionary<int, Grabber>();
-        enabled = new MelonPreferences_Entry<bool>[7] {
+        AverageVelocities = new Vector3[10];
+        enabled = new MelonPreferences_Entry<bool>[6] {
             EnableHands,
             EnableFeet,
             EnableHands,
             EnableFeet,
             EnableHead,
-            EnableHip,
-            EnableRoot
+            EnableHip
         };
         Patches.grabbing = new Dictionary<int, bool>();
         HarmonyInstance.PatchAll(typeof(Patches));
@@ -96,7 +105,18 @@ public class LimbGrabber : MelonMod
                 var limb = new GameObject("LimbGrabberTarget").transform;
                 Limbs[i].Target = limb;
                 limb.parent = PlayerLocal;
+                if (i == 4)
+                {
+                    var camera = new GameObject("Camera");
+                    var cameraComponent = camera.AddComponent<Camera>();
+                    camera.AddComponent<DisableXRFollow>();
+                    camera.transform.parent = limb;
+                    camera.SetActive(false);
+                    cameraComponent.nearClipPlane = 0.01f;
+                    Camera = camera;
+                }
             }
+            Grounded = typeof(MovementSystem).GetField("_isGroundedRaw", BindingFlags.NonPublic | BindingFlags.Instance);
         }
     }
 
@@ -124,6 +144,35 @@ public class LimbGrabber : MelonMod
                 Vector3 offset = Limbs[i].Parent.rotation * Limbs[i].PositionOffset;
                 Limbs[i].Target.position = Limbs[i].Parent.position + offset;
                 Limbs[i].Target.rotation = Limbs[i].Parent.rotation * Limbs[i].RotationOffset;
+                if(i == 4) IsAirborn = true;
+            }
+        }
+        if (EnableRoot.Value && Limbs[4].Parent != null)
+        {
+            if (PreserveMomentum.Value)
+            {
+                AverageVelocities[VelocityIndex] = PlayerLocal.position - LastRootPosition;
+                LastRootPosition = PlayerLocal.position;
+                VelocityIndex++;
+                if (VelocityIndex == AverageVelocities.Length)
+                {
+                    VelocityIndex = 0;
+                }
+            }
+            if (Limbs[4].Grabbed) PlayerLocal.position = Limbs[4].Parent.position + RootOffset;
+            else if (IsAirborn)
+            {
+                if (Physics.CheckSphere(PlayerLocal.position, 0.1f, MovementSystem.Instance.groundMask, QueryTriggerInteraction.Ignore))
+                {
+                    if(Debug.Value) MelonLogger.Msg("Landed");
+                    IsAirborn = false;
+                    MovementSystem.Instance.canMove = true;
+                }
+                if (PreserveMomentum.Value)
+                {
+                    Velocity.y -= MovementSystem.Instance.gravity * 0.01f * Time.deltaTime * GravityMultiplier.Value;
+                    PlayerLocal.position += Velocity * VelocityMultiplier.Value;
+                }
             }
         }
     }
@@ -154,6 +203,18 @@ public class LimbGrabber : MelonMod
             Limbs[closest].Grabbed = true;
             SetTarget(closest, Limbs[closest].Target);
             SetTracking(closest, true);
+            if(closest == 4)
+            {
+                RootOffset = PlayerLocal.position - parent.position;
+                if (EnableRoot.Value) MovementSystem.Instance.canMove = false;
+                if (CameraFollow.Value)
+                {
+                    Camera.transform.position = MovementSystem.Instance.rotationPivot.position;
+                    Camera.transform.rotation = MovementSystem.Instance.rotationPivot.rotation;
+                    MovementSystem.Instance.rotationPivot.gameObject.SetActive(false);
+                    Camera.SetActive(true);
+                }
+            }
         }
     }
 
@@ -165,6 +226,20 @@ public class LimbGrabber : MelonMod
         Limbs[grabber].Grabbed = false;
         SetTarget(grabber, Limbs[grabber].PreviousTarget);
         if (!tracking[grabber]) SetTracking(grabber, false);
+        if(grabber == 4)
+        {
+            MovementSystem.Instance.rotationPivot.gameObject.SetActive(true);
+            Camera.SetActive(false);
+            if (!PreserveMomentum.Value) MovementSystem.Instance.canMove = true;
+            else
+            {
+                for (int i = 0; i < AverageVelocities.Length; i++)
+                {
+                    Velocity += AverageVelocities[i];
+                }
+                Velocity /= AverageVelocities.Length;
+            }
+        }
     }
 
     public static void SetTarget(int index, Transform Target)
@@ -215,100 +290,5 @@ public class LimbGrabber : MelonMod
                 IKSolver.spine.pelvisPositionWeight = value ? 1 : 0;
                 break;
         }
-    }
-}
-public class Patches
-{
-    public static Dictionary<int, bool> grabbing;
-
-    [HarmonyPostfix]
-    [HarmonyPatch(typeof(PuppetMaster), "AvatarInstantiated")]
-    public static void SetupGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
-    {
-        Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
-        Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
-
-        int leftid = LeftHand.GetInstanceID();
-        int rightid = RightHand.GetInstanceID();
-
-        if (!LimbGrabber.Grabbers.ContainsKey(leftid))
-        {
-            if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
-            LimbGrabber.Grabbers.Add(leftid, new LimbGrabber.Grabber(LeftHand, false, -1));
-        }
-        if (!LimbGrabber.Grabbers.ContainsKey(rightid))
-        {
-            if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
-            LimbGrabber.Grabbers.Add(rightid, new LimbGrabber.Grabber(RightHand, false, -1));
-        }
-    }
-
-        [HarmonyPostfix]
-    [HarmonyPatch(typeof(PuppetMaster), "Update")]
-    public static void UpdateGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
-    {
-        if (____distance > 10 || !Friends.FriendsWith(____playerDescriptor.ownerId) && LimbGrabber.Friend.Value || ____animator == null) return;
-        
-        Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
-        Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
-
-        int leftid = LeftHand.GetInstanceID();
-        int rightid = RightHand.GetInstanceID();
-
-        if(!grabbing.ContainsKey(leftid)) grabbing.Add(leftid, false);
-        if(!grabbing.ContainsKey(rightid)) grabbing.Add(rightid, false);
-
-        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft == 1 && !grabbing[leftid] || ____playerAvatarMovementDataCurrent.LeftMiddleCurl > 0.5 && !grabbing[leftid])
-        {
-            LimbGrabber.Grab(leftid, LeftHand);
-            grabbing[leftid] = true;
-        }
-        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft != 1 && ____playerAvatarMovementDataCurrent.LeftMiddleCurl < 0.5 && grabbing[leftid])
-        {
-            LimbGrabber.Release(leftid);
-            grabbing[leftid] = false;
-        }
-        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight == 1 && !grabbing[rightid] || ____playerAvatarMovementDataCurrent.RightMiddleCurl > 0.5 && !grabbing[rightid])
-        {
-            LimbGrabber.Grab(rightid, RightHand);
-            grabbing[rightid] = true;
-        }
-        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight != 1 && ____playerAvatarMovementDataCurrent.RightMiddleCurl < 0.5 && grabbing[rightid])
-        {
-            LimbGrabber.Release(rightid);
-            grabbing[rightid] = false;
-        }
-    }
-
-    [HarmonyPostfix]
-    [HarmonyPatch(typeof(BodySystem), "Calibrate")]
-    [HarmonyPatch(typeof(PlayerSetup), "SetupAvatar")]
-    public static void LimbSetup()
-    {
-        LimbGrabber.Limb limb = new LimbGrabber.Limb();
-        Animator animator = PlayerSetup.Instance._animator;
-        IKSolverVR solver = PlayerSetup.Instance._avatar.GetComponent<VRIK>().solver;
-        LimbGrabber.IKSolver = solver;
-
-        LimbGrabber.tracking[0] = BodySystem.TrackingLeftArmEnabled;
-        LimbGrabber.tracking[1] = BodySystem.TrackingLeftLegEnabled;
-        LimbGrabber.tracking[2] = BodySystem.TrackingRightArmEnabled;
-        LimbGrabber.tracking[3] = BodySystem.TrackingRightLegEnabled;
-        LimbGrabber.tracking[4] = solver.spine.positionWeight != 0;
-        LimbGrabber.tracking[5] = solver.spine.pelvisPositionWeight != 0;
-
-        LimbGrabber.Limbs[0].limb = animator.GetBoneTransform(HumanBodyBones.LeftHand);
-        LimbGrabber.Limbs[0].PreviousTarget = solver.leftArm.target;
-        LimbGrabber.Limbs[1].limb = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
-        LimbGrabber.Limbs[1].PreviousTarget = solver.leftLeg.target;
-        LimbGrabber.Limbs[2].limb = animator.GetBoneTransform(HumanBodyBones.RightHand);
-        LimbGrabber.Limbs[2].PreviousTarget = solver.rightArm.target;
-        LimbGrabber.Limbs[3].limb = animator.GetBoneTransform(HumanBodyBones.RightFoot);
-        LimbGrabber.Limbs[3].PreviousTarget = solver.rightLeg.target;
-        LimbGrabber.Limbs[4].limb = animator.GetBoneTransform(HumanBodyBones.Head);
-        LimbGrabber.Limbs[4].PreviousTarget = solver.spine.headTarget;
-        LimbGrabber.Limbs[5].limb = animator.GetBoneTransform(HumanBodyBones.Hips);
-        LimbGrabber.Limbs[5].PreviousTarget = solver.spine.pelvisTarget;
-        LimbGrabber.Initialized = true;
     }
 }
