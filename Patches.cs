@@ -1,75 +1,29 @@
 ﻿using System.Collections.Generic;
 using System;
 using UnityEngine;
-using MelonLoader;
 using HarmonyLib;
 using RootMotion.FinalIK;
 using ABI_RC.Core.Player;
-using ABI_RC.Core.Networking.IO.Social;
 using ABI_RC.Systems.IK.SubSystems;
 
 namespace Koneko;
 public class Patches
 {
-    public static Dictionary<int, bool> grabbing;
-
     [HarmonyPostfix]
     [HarmonyPatch(typeof(PuppetMaster), "AvatarInstantiated")]
-    public static void SetupGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
+    public static void SetupGrabber(ref PlayerDescriptor ____playerDescriptor, ref PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, ref Animator ____animator)
     {
         Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
+        GrabberComponent LeftGrabber = LeftHand.gameObject.AddComponent<GrabberComponent>();
+        LeftGrabber.MovementData = ____playerAvatarMovementDataCurrent;
+        LeftGrabber.PlayerDescriptor = ____playerDescriptor;
+        LeftGrabber.grabber = 1;
+
         Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
-
-        int leftid = LeftHand.GetInstanceID();
-        int rightid = RightHand.GetInstanceID();
-
-        if (!LimbGrabber.Grabbers.ContainsKey(leftid))
-        {
-            if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
-            LimbGrabber.Grabbers.Add(leftid, new LimbGrabber.Grabber(LeftHand, false, -1));
-        }
-        if (!LimbGrabber.Grabbers.ContainsKey(rightid))
-        {
-            if (LimbGrabber.Debug.Value) MelonLogger.Msg("Created new Grabber");
-            LimbGrabber.Grabbers.Add(rightid, new LimbGrabber.Grabber(RightHand, false, -1));
-        }
-    }
-
-    [HarmonyPostfix]
-    [HarmonyPatch(typeof(PuppetMaster), "Update")]
-    public static void UpdateGrabber(PlayerDescriptor ____playerDescriptor, PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, float ____distance, Animator ____animator)
-    {
-        if (____distance > 10 || !Friends.FriendsWith(____playerDescriptor.ownerId) && LimbGrabber.Friend.Value || ____animator == null) return;
-
-        Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
-        Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
-
-        int leftid = LeftHand.GetInstanceID();
-        int rightid = RightHand.GetInstanceID();
-
-        if (!grabbing.ContainsKey(leftid)) grabbing.Add(leftid, false);
-        if (!grabbing.ContainsKey(rightid)) grabbing.Add(rightid, false);
-
-        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft == 1 && !grabbing[leftid] || ____playerAvatarMovementDataCurrent.LeftMiddleCurl > 0.5 && !grabbing[leftid])
-        {
-            LimbGrabber.Grab(leftid, LeftHand);
-            grabbing[leftid] = true;
-        }
-        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureLeft != 1 && ____playerAvatarMovementDataCurrent.LeftMiddleCurl < 0.5 && grabbing[leftid])
-        {
-            LimbGrabber.Release(leftid);
-            grabbing[leftid] = false;
-        }
-        if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight == 1 && !grabbing[rightid] || ____playerAvatarMovementDataCurrent.RightMiddleCurl > 0.5 && !grabbing[rightid])
-        {
-            LimbGrabber.Grab(rightid, RightHand);
-            grabbing[rightid] = true;
-        }
-        else if ((int)____playerAvatarMovementDataCurrent.AnimatorGestureRight != 1 && ____playerAvatarMovementDataCurrent.RightMiddleCurl < 0.5 && grabbing[rightid])
-        {
-            LimbGrabber.Release(rightid);
-            grabbing[rightid] = false;
-        }
+        GrabberComponent RightGrabber = RightHand.gameObject.AddComponent<GrabberComponent>();
+        RightGrabber.MovementData = ____playerAvatarMovementDataCurrent;
+        RightGrabber.PlayerDescriptor = ____playerDescriptor;
+        RightGrabber.grabber = 2;
     }
 
     [HarmonyPostfix]
@@ -77,7 +31,6 @@ public class Patches
     [HarmonyPatch(typeof(PlayerSetup), "SetupAvatar")]
     public static void LimbSetup()
     {
-        LimbGrabber.Limb limb = new LimbGrabber.Limb();
         Animator animator = PlayerSetup.Instance._animator;
         IKSolverVR solver = PlayerSetup.Instance._avatar.GetComponent<VRIK>().solver;
         LimbGrabber.IKSolver = solver;
@@ -101,6 +54,7 @@ public class Patches
         LimbGrabber.Limbs[4].PreviousTarget = solver.spine.headTarget;
         LimbGrabber.Limbs[5].limb = animator.GetBoneTransform(HumanBodyBones.Hips);
         LimbGrabber.Limbs[5].PreviousTarget = solver.spine.pelvisTarget;
+        LimbGrabber.Neck = animator.GetBoneTransform(HumanBodyBones.Neck);
         LimbGrabber.Initialized = true;
     }
 }
