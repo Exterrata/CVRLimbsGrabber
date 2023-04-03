@@ -11,6 +11,14 @@ https://user-images.githubusercontent.com/38149279/229303345-b08e59f1-6dcf-4a47-
 >
 Requires [DesktopVRIK](https://github.com/notakidonsteam/desktopvrik) to function on desktop mode
 
-TODO:
+### you can make your own grabbers on avatars and props too
+
+to do it get the unity package in the releases
+
+included in unity package is the grabber script and a example prop
+
+to make grabber script work drag it on to the grabber and animate the grab value on and off
+
+### TODO:
 
 - Posing
