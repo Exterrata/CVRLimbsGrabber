@@ -164,7 +164,6 @@ public class LimbGrabber : MelonMod
         {
             if (!enabled[closest].Value) return;
             grabber.Limb = closest;
-            MelonLogger.Msg(closest);
             if (closest == 6)
             {
                 if (Debug.Value) MelonLogger.Msg("limb " + Neck.name + " was grabbed by " + grabber.transform.name);
