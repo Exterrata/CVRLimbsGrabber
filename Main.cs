@@ -161,7 +161,7 @@ public class LimbGrabber : MelonMod
 
     public static void Grab(GrabberComponent grabber)
     {
-        if (!Enabled.Value) return;
+        if (!Enabled.Value || BodySystem.isCalibrating) return;
         if (Debug.Value) MelonLogger.Msg("grab was detected");
         int closest = 0;
         float distance = float.PositiveInfinity;
