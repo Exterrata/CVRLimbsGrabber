@@ -11,7 +11,7 @@ public class GrabberComponent : MonoBehaviour
     internal PlayerDescriptor PlayerDescriptor;
     internal int grabber = 0;
     internal int Limb = -1;
-    private bool Grabbing;
+    internal bool Grabbing;
     public bool Grab;
 
     void Update()
