@@ -12,7 +12,7 @@ using System.Reflection;
 using ml_prm;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
-[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "LimbGrabber", "1.0.0", "Exterrata")]
+[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbGrabber", "1.0.0", "Exterrata")]
 [assembly: MelonOptionalDependencies("PlayerRagdollMod")]
 
 namespace Koneko;
