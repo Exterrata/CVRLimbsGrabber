@@ -12,7 +12,7 @@ using System.Reflection;
 using ml_prm;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
-[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbGrabber", "1.0.0", "Exterrata")]
+[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbsGrabber", "1.0.0", "Exterrata")]
 [assembly: MelonOptionalDependencies("PlayerRagdollMod")]
 
 namespace Koneko;
@@ -151,7 +151,7 @@ public class LimbGrabber : MelonMod
                 if (Physics.CheckCapsule(PlayerLocal.position, Limbs[4].Target.position, 0.2f, MovementSystem.Instance.groundMask, QueryTriggerInteraction.Ignore) || MovementSystem.Instance.flying)
                 {
                     if(Debug.Value) MelonLogger.Msg("Landed");
-                    MelonCoroutines.Start(RagdollSupport.WaitToggleRagdoll());
+                    if (PrmExists && RagdollRelease.Value) MelonCoroutines.Start(RagdollSupport.WaitToggleRagdoll());
                     IsAirborn = false;
                     MovementSystem.Instance.canMove = true;
                 }
