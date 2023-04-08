@@ -1,6 +1,8 @@
 # CVRLimbsGrabber
 Lets your limbs be grabbed in CVR.
 
+now with ragdolling. get ml_prm [here](https://github.com/SDraw/ml_mods_cvr/releases) for it to work
+
 - Limb grabbing:
 
 https://user-images.githubusercontent.com/38149279/229303321-e3d211bf-9d68-4fd2-aee7-d67dc6c34864.mp4
@@ -22,3 +24,11 @@ to make grabber script work drag it on to the grabber and animate the grab value
 ### TODO:
 
 - Posing
+
+## Building
+
+download project
+
+get [ml_prm](https://github.com/SDraw/ml_mods_cvr/releases), [NStrip](https://github.com/bbepis/NStrip/releases), and "RunNStrip.bat" and put them in the same folder and run "RunNstrip.bat"
+
+add the new ml_prm-nstrip.dll as a reference
