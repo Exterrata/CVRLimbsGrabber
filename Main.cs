@@ -179,9 +179,10 @@ public class LimbGrabber : MelonMod
         if (distance < Distance.Value)
         {
             if (!enabled[closest].Value) return;
-            grabber.Limb = closest;
             if (closest == 6)
             {
+                if (!MovementSystem.Instance.canFly) return;
+                grabber.Limb = closest;
                 if (Debug.Value) MelonLogger.Msg("limb " + Neck.name + " was grabbed by " + grabber.transform.name);
                 RootOffset = PlayerLocal.position - grabber.transform.position;
                 RootParent = grabber.transform;
@@ -190,6 +191,7 @@ public class LimbGrabber : MelonMod
                 IsAirborn = true;
                 return;
             }
+            grabber.Limb = closest;
             if (Debug.Value) MelonLogger.Msg("limb " + Limbs[closest].limb.name + " was grabbed by " + grabber.transform.name);
             Limbs[closest].PositionOffset = Quaternion.Inverse(grabber.transform.rotation) * (Limbs[closest].limb.position - grabber.transform.position);
             Limbs[closest].RotationOffset = Quaternion.Inverse(grabber.transform.rotation) * Limbs[closest].limb.rotation;
