@@ -24,11 +24,3 @@ to make grabber script work drag it on to the grabber and animate the grab value
 ### TODO:
 
 - Posing
-
-## Building
-
-download project
-
-get [ml_prm](https://github.com/SDraw/ml_mods_cvr/releases), [NStrip](https://github.com/bbepis/NStrip/releases), and "RunNStrip.bat" and put them in the same folder and run "RunNstrip.bat"
-
-add the new ml_prm-nstrip.dll as a reference
