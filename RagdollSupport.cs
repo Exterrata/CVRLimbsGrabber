@@ -24,7 +24,7 @@ internal class RagdollSupport
             if (Velocity.magnitude < 0.1) WaitUnragdoll = false;
             yield return new WaitForSeconds(1);
         }
-        yield return new WaitForSeconds(3);
-        Ragdoll.SwitchRagdoll();
+        yield return new WaitForSeconds(2);
+        if(Ragdoll.enabled) Ragdoll.SwitchRagdoll();
     }
 }

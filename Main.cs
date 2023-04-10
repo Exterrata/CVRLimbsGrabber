@@ -14,6 +14,7 @@ using ml_prm;
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
 [assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbsGrabber", "1.0.0", "Exterrata")]
 [assembly: MelonOptionalDependencies("PlayerRagdollMod")]
+[assembly: HarmonyDontPatchAll]
 
 namespace Koneko;
 public class LimbGrabber : MelonMod

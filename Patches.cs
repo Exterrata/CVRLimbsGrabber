@@ -5,6 +5,7 @@ using HarmonyLib;
 using RootMotion.FinalIK;
 using ABI_RC.Core.Player;
 using ABI_RC.Systems.IK.SubSystems;
+using MelonLoader;
 
 namespace Koneko;
 public class Patches
@@ -33,6 +34,10 @@ public class Patches
     {
         Animator animator = PlayerSetup.Instance._animator;
         IKSolverVR solver = PlayerSetup.Instance._avatar.GetComponent<VRIK>().solver;
+        if(solver == null ) {
+            LimbGrabber.Initialized = false;
+            return;
+        }
         LimbGrabber.IKSolver = solver;
 
         LimbGrabber.tracking[0] = BodySystem.TrackingLeftArmEnabled;
