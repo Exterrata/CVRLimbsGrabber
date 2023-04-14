@@ -19,12 +19,14 @@ public class Patches
         LeftGrabber.MovementData = ____playerAvatarMovementDataCurrent;
         LeftGrabber.PlayerDescriptor = ____playerDescriptor;
         LeftGrabber.grabber = 1;
+        LeftGrabber.PlayerAnimator = ____animator;
 
         Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
         GrabberComponent RightGrabber = RightHand.gameObject.AddComponent<GrabberComponent>();
         RightGrabber.MovementData = ____playerAvatarMovementDataCurrent;
         RightGrabber.PlayerDescriptor = ____playerDescriptor;
         RightGrabber.grabber = 2;
+        RightGrabber.PlayerAnimator = ____animator;
     }
 
     [HarmonyPostfix]
