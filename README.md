@@ -11,7 +11,7 @@ https://user-images.githubusercontent.com/38149279/229303321-e3d211bf-9d68-4fd2-
 
 https://user-images.githubusercontent.com/38149279/229303345-b08e59f1-6dcf-4a47-9c9e-b34d9f6d2470.mp4
 >
-Requires [DesktopVRIK](https://github.com/notakidonsteam/desktopvrik) to function on desktop mode
+Requires [DesktopVRIK](https://github.com/NotAKidOnSteam/NAK_CVR_Mods/tree/main/DesktopVRIK) to function on desktop mode
 
 ### you can make your own grabbers on avatars and props too
 
