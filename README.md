@@ -1,7 +1,11 @@
 # CVRLimbsGrabber
 Lets your limbs be grabbed in CVR.
 
+fist to grab, thumbs up to pose
+
 now with ragdolling. get ml_prm [here](https://github.com/SDraw/ml_mods_cvr/releases) for it to work
+
+also has [btkui](https://github.com/BTK-Development/BTKUILib/releases) support
 
 - Limb grabbing:
 
@@ -20,7 +24,3 @@ to do it get the unity package in the releases
 included in unity package is the grabber script and a example prop
 
 to make grabber script work drag it on to the grabber and animate the grab value on and off
-
-### TODO:
-
-- Posing
