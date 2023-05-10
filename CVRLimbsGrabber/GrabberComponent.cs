@@ -3,6 +3,7 @@ using System;
 using UnityEngine;
 using ABI_RC.Core.Player;
 using ABI_RC.Core.Networking.IO.Social;
+using MelonLoader;
 
 namespace Koneko;
 public class GrabberComponent : MonoBehaviour
@@ -11,27 +12,36 @@ public class GrabberComponent : MonoBehaviour
     internal PlayerDescriptor PlayerDescriptor;
     internal int grabber = 0;
     internal int Limb = -1;
-    internal bool Grabbing;
+    internal int Gesture;
     public bool Grab;
 
     void Update()
     {
-        bool grabbing = false;
-        if (grabber == 0) grabbing = Grab;
+        int gesture = 0;
+        if (grabber == 0) gesture = Grab ? 1 : 0;
         else if (!Friends.FriendsWith(PlayerDescriptor.ownerId) && LimbGrabber.Friend.Value) return;
-        else if (grabber == 1) grabbing = (int)MovementData.AnimatorGestureLeft == 1 || MovementData.LeftMiddleCurl > 0.5;
-        else if (grabber == 2) grabbing = (int)MovementData.AnimatorGestureRight == 1 || MovementData.RightMiddleCurl > 0.5;
+        else if (grabber == 1) { 
+            if((int)MovementData.AnimatorGestureLeft == 1 || MovementData.LeftMiddleCurl > 0.5 && MovementData.LeftThumbCurl > 0.5) gesture = 1; 
+            else if((int)MovementData.AnimatorGestureLeft == 2 || MovementData.LeftMiddleCurl > 0.5 && MovementData.LeftThumbCurl < 0.5) gesture = 2;
+        }
+        else if (grabber == 2) { 
+            if((int)MovementData.AnimatorGestureRight == 1 || MovementData.RightMiddleCurl > 0.5 && MovementData.RightThumbCurl > 0.5) gesture = 1;
+            else if((int)MovementData.AnimatorGestureRight == 2 || MovementData.RightMiddleCurl > 0.5 && MovementData.RightThumbCurl < 0.5) gesture = 2;
+        }
 
-        if (grabbing && !Grabbing)
+        if (gesture == 1 && Gesture != 1)
         {
             LimbGrabber.Grab(this);
-            Grabbing = true;
         }
-        else if (!grabbing && Grabbing)
+        if (gesture == 0 && Gesture == 1)
         {
             LimbGrabber.Release(this);
-            Grabbing = false;
         }
+        if (gesture == 2 && Gesture != 2)
+        {
+            LimbGrabber.Pose(this);
+        }
+        Gesture = gesture;
     }
 
     void OnDestroy()

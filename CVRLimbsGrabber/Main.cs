@@ -8,11 +8,10 @@ using ABI_RC.Systems.IK.SubSystems;
 using ABI_RC.Systems.MovementSystem;
 using ABI_RC.Core.Util.AssetFiltering;
 using System.Linq;
-using System.Reflection;
-using ml_prm;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
-[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbsGrabber", "1.0.0", "Exterrata")]
+[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbsGrabber", "1.1.0", "Exterrata")]
+[assembly: MelonAdditionalDependencies("DesktopVRSwitch")]
 [assembly: MelonOptionalDependencies("PlayerRagdollMod")]
 [assembly: HarmonyDontPatchAll]
 
@@ -26,6 +25,7 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<bool> EnableHead = Category.CreateEntry<bool>("EnableHead", true);
     public static readonly MelonPreferences_Entry<bool> EnableHip = Category.CreateEntry<bool>("EnableHip", true);
     public static readonly MelonPreferences_Entry<bool> EnableRoot = Category.CreateEntry<bool>("EnableRoot", true);
+    public static readonly MelonPreferences_Entry<bool> EnablePose = Category.CreateEntry<bool>("EnablePosing", true);
     public static readonly MelonPreferences_Entry<bool> PreserveMomentum = Category.CreateEntry<bool>("PreserveMomentum", true);
     public static readonly MelonPreferences_Entry<bool> Friend = Category.CreateEntry<bool>("FriendsOnly", true);
     public static readonly MelonPreferences_Entry<bool> RagdollRelease = Category.CreateEntry<bool>("RagdollOnRelease", true);
@@ -33,30 +33,24 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<float> VelocityMultiplier = Category.CreateEntry<float>("VelocityMultiplier", 1f);
     public static readonly MelonPreferences_Entry<float> GravityMultiplier = Category.CreateEntry<float>("GravityMultiplier", 1f);
     public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.15f);
-    //  LeftHand = 0
-    //  LeftFoot = 1
-    //  RightHand = 2
-    //  RightFoot = 3
-    //  Head = 4
-    //  Hip = 5
-    //  Root = 6
-    public static readonly string[] LimbNames = { "LeftHand", "LeftFoot", "RightHand", "RightFoot", "Head", "Hip"};
+
     public static MelonPreferences_Entry<bool>[] enabled;
     public static bool[] tracking;
     public static Limb[] Limbs;
     public static Transform PlayerLocal;
     public static Transform Neck;
     public static Transform RootParent;
+    public static Rigidbody Root;
     public static bool RootGrabbed;
     public static Vector3 RootOffset;
     public static Vector3 LastRootPosition;
-    public static Vector3 Velocity;
     public static Vector3[] AverageVelocities;
     public static int VelocityIndex;
     public static IKSolverVR IKSolver;
     public static bool Initialized;
     public static bool IsAirborn;
     public static bool PrmExists;
+    public static bool BTKExists;
 
     public struct Limb
     {
@@ -73,7 +67,7 @@ public class LimbGrabber : MelonMod
     {
         MelonLogger.Msg("Starting");
         tracking = new bool[6];
-        AverageVelocities = new Vector3[10];
+        AverageVelocities = new Vector3[5];
         enabled = new MelonPreferences_Entry<bool>[7] {
             EnableHands,
             EnableFeet,
@@ -83,7 +77,6 @@ public class LimbGrabber : MelonMod
             EnableHip,
             EnableRoot
         };
-
         HarmonyInstance.PatchAll(typeof(Patches));
 
         var propWhitelist = Traverse.Create(typeof(SharedFilter)).Field<HashSet<Type>>("_spawnableWhitelist").Value;
@@ -101,6 +94,19 @@ public class LimbGrabber : MelonMod
         {
             Limbs = new Limb[6];
             PlayerLocal = GameObject.Find("_PLAYERLOCAL").transform;
+            var root = new GameObject("LimbGrabberPhysics");
+            UnityEngine.Object.DontDestroyOnLoad(root);
+            var col = root.AddComponent<SphereCollider>();
+            Root = root.AddComponent<Rigidbody>();
+            MovementSystem.Instance.RemovePlayerCollision(col);
+            Physics.IgnoreCollision(MovementSystem.Instance.controller, col);
+            Physics.IgnoreCollision(MovementSystem.Instance.holoPortController, col);
+            root.layer = 8;
+            col.radius = 0.1f;
+            Root.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            Root.isKinematic = true;
+            Root.useGravity = false;
+
             for (int i = 0; i < Limbs.Length; i++)
             {
                 var limb = new GameObject("LimbGrabberTarget").transform;
@@ -111,6 +117,11 @@ public class LimbGrabber : MelonMod
             {
                 RagdollSupport.Initialize();
                 PrmExists = true;
+            }
+            if (RegisteredMelons.Any(it => it.Info.Name == "BTKUILib"))
+            {
+                BTKUISupport.Initialize();
+                BTKExists = true;
             }
         }
     }
@@ -144,15 +155,13 @@ public class LimbGrabber : MelonMod
             {
                 if (PreserveMomentum.Value)
                 {
-                    LastRootPosition = PlayerLocal.position;
-                    Velocity.y -= MovementSystem.Instance.gravity * 0.01f * Time.deltaTime * GravityMultiplier.Value;
-                    PlayerLocal.position += Velocity;
-                    Velocity = PlayerLocal.position - LastRootPosition;
+                    Root.velocity = Root.velocity + (new Vector3(0, -MovementSystem.Instance.gravity, 0) * 0.01f * Time.deltaTime * GravityMultiplier.Value);
+                    PlayerLocal.position = Root.transform.position + new Vector3(0, -0.1f, 0);
                 }
-                if (Physics.CheckCapsule(PlayerLocal.position, Limbs[4].Target.position, 0.2f, MovementSystem.Instance.groundMask, QueryTriggerInteraction.Ignore) || MovementSystem.Instance.flying)
+                if (Physics.CheckSphere(PlayerLocal.position, 0.11f, MovementSystem.Instance.groundMask, QueryTriggerInteraction.Ignore) || MovementSystem.Instance.flying)
                 {
-                    if(Debug.Value) MelonLogger.Msg("Landed");
-                    if (PrmExists && RagdollRelease.Value) MelonCoroutines.Start(RagdollSupport.WaitToggleRagdoll());
+                    if (Debug.Value) MelonLogger.Msg("Landed");
+                    Root.isKinematic = true;
                     IsAirborn = false;
                     MovementSystem.Instance.canMove = true;
                 }
@@ -203,6 +212,17 @@ public class LimbGrabber : MelonMod
         }
     }
 
+    public static void Pose(GrabberComponent grabber)
+    {
+        int limb = grabber.Limb;
+        if (limb == -1) return;
+        if (limb == 6 || !EnablePose.Value) Release(grabber);
+        grabber.Limb = -1;
+        if (grabber.transform != Limbs[limb].Parent) return;
+        if (Debug.Value) MelonLogger.Msg("limb " + Limbs[limb].limb.name + " was posed by " + grabber.transform.name);
+        Limbs[limb].Grabbed = false;
+    }
+
     public static void Release(GrabberComponent grabber)
     {
         int limb = grabber.Limb;
@@ -215,12 +235,16 @@ public class LimbGrabber : MelonMod
             if (!PreserveMomentum.Value) MovementSystem.Instance.canMove = true;
             else
             {
+                Vector3 Velocity = Vector3.zero;
                 for (int i = 0; i < AverageVelocities.Length; i++)
                 {
                     Velocity += AverageVelocities[i];
                 }
                 Velocity /= AverageVelocities.Length;
-                Velocity *= VelocityMultiplier.Value;
+                Velocity *= VelocityMultiplier.Value * 100;
+                Root.transform.position = PlayerLocal.transform.position + new Vector3(0, 0.1f, 0);
+                Root.isKinematic = false;
+                Root.velocity = Velocity;
             }
             RootGrabbed = false;
             if (PrmExists && RagdollRelease.Value) RagdollSupport.ToggleRagdoll();
@@ -231,6 +255,18 @@ public class LimbGrabber : MelonMod
         Limbs[limb].Grabbed = false;
         SetTarget(limb, Limbs[limb].PreviousTarget);
         if (!tracking[limb]) SetTracking(limb, false);
+    }
+
+    public static void ReleaseAll()
+    {
+        if (Debug.Value) MelonLogger.Msg("releasing all limbs");
+        for (int i = 0; i < Limbs.Length; i++)
+        {
+            Limbs[i].Grabbed = false;
+            Limbs[i].Parent = null;
+            SetTarget(i, Limbs[i].PreviousTarget);
+            if (!tracking[i]) SetTracking(i, false);
+        }
     }
 
     public static void SetTarget(int index, Transform Target)
@@ -285,6 +321,7 @@ public class LimbGrabber : MelonMod
 
     public static void StopFall()
     {
+        Root.isKinematic = true;
         IsAirborn = false;
         MovementSystem.Instance.canMove = true;
     }

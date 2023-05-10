@@ -33,11 +33,13 @@ public class Patches
     public static void LimbSetup()
     {
         Animator animator = PlayerSetup.Instance._animator;
-        IKSolverVR solver = PlayerSetup.Instance._avatar.GetComponent<VRIK>().solver;
-        if(solver == null ) {
+        VRIK vrik = PlayerSetup.Instance._avatar.GetComponent<VRIK>();
+        if (vrik == null)
+        {
             LimbGrabber.Initialized = false;
             return;
         }
+        IKSolverVR solver = vrik.solver;
         LimbGrabber.IKSolver = solver;
 
         LimbGrabber.tracking[0] = BodySystem.TrackingLeftArmEnabled;
