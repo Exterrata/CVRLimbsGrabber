@@ -32,7 +32,7 @@ public class LimbGrabber : MelonMod
     public static readonly MelonPreferences_Entry<bool> Debug = Category.CreateEntry<bool>("Debug", false);
     public static readonly MelonPreferences_Entry<float> VelocityMultiplier = Category.CreateEntry<float>("VelocityMultiplier", 1f);
     public static readonly MelonPreferences_Entry<float> GravityMultiplier = Category.CreateEntry<float>("GravityMultiplier", 1f);
-    public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("Distance", 0.15f);
+    public static readonly MelonPreferences_Entry<float> Distance = Category.CreateEntry<float>("GrabDistance", 0.15f);
 
     public static MelonPreferences_Entry<bool>[] enabled;
     public static bool[] tracking;
@@ -77,15 +77,17 @@ public class LimbGrabber : MelonMod
             EnableHip,
             EnableRoot
         };
-        HarmonyInstance.PatchAll(typeof(Patches));
+        try {
+            HarmonyInstance.PatchAll(typeof(Patches));
+        } catch(Exception e) { 
+            MelonLogger.Error(e);
+        }
 
         var propWhitelist = Traverse.Create(typeof(SharedFilter)).Field<HashSet<Type>>("_spawnableWhitelist").Value;
         propWhitelist.Add(typeof(GrabberComponent));
 
         var avatarWhitelist = Traverse.Create(typeof(SharedFilter)).Field<HashSet<Type>>("_avatarWhitelist").Value;
         avatarWhitelist.Add(typeof(GrabberComponent));
-
-        MovementSystem.OnPlayerTeleported.AddListener(StopFall);
     }
 
     public override void OnSceneWasInitialized(int buildIndex, string sceneName)
@@ -123,6 +125,7 @@ public class LimbGrabber : MelonMod
                 BTKUISupport.Initialize();
                 BTKExists = true;
             }
+            MovementSystem.OnPlayerTeleported.AddListener(StopFall);
         }
     }
 
@@ -155,7 +158,7 @@ public class LimbGrabber : MelonMod
             {
                 if (PreserveMomentum.Value)
                 {
-                    Root.velocity = Root.velocity + (new Vector3(0, -MovementSystem.Instance.gravity, 0) * 0.01f * Time.deltaTime * GravityMultiplier.Value);
+                    Root.velocity = Root.velocity + (new Vector3(0, -MovementSystem.Instance.gravity, 0) * Time.deltaTime * GravityMultiplier.Value);
                     PlayerLocal.position = Root.transform.position + new Vector3(0, -0.1f, 0);
                 }
                 if (Physics.CheckSphere(PlayerLocal.position, 0.11f, MovementSystem.Instance.groundMask, QueryTriggerInteraction.Ignore) || MovementSystem.Instance.flying)
@@ -247,7 +250,7 @@ public class LimbGrabber : MelonMod
                 Root.velocity = Velocity;
             }
             RootGrabbed = false;
-            if (PrmExists && RagdollRelease.Value) RagdollSupport.ToggleRagdoll();
+            if (PrmExists && RagdollRelease.Value && Root.velocity.magnitude > 0.2f) RagdollSupport.ToggleRagdoll();
             return;
         }
         if (grabber.transform != Limbs[limb].Parent) return;

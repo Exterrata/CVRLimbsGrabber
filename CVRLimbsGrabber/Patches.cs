@@ -15,12 +15,14 @@ public class Patches
     public static void SetupGrabber(ref PlayerDescriptor ____playerDescriptor, ref PlayerAvatarMovementData ____playerAvatarMovementDataCurrent, ref Animator ____animator)
     {
         Transform LeftHand = ____animator.GetBoneTransform(HumanBodyBones.LeftHand);
+        if (LeftHand == null) return;
         GrabberComponent LeftGrabber = LeftHand.gameObject.AddComponent<GrabberComponent>();
         LeftGrabber.MovementData = ____playerAvatarMovementDataCurrent;
         LeftGrabber.PlayerDescriptor = ____playerDescriptor;
         LeftGrabber.grabber = 1;
 
         Transform RightHand = ____animator.GetBoneTransform(HumanBodyBones.RightHand);
+        if (RightHand == null) return;
         GrabberComponent RightGrabber = RightHand.gameObject.AddComponent<GrabberComponent>();
         RightGrabber.MovementData = ____playerAvatarMovementDataCurrent;
         RightGrabber.PlayerDescriptor = ____playerDescriptor;
