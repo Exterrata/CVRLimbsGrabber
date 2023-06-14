@@ -219,7 +219,11 @@ public class LimbGrabber : MelonMod
     {
         int limb = grabber.Limb;
         if (limb == -1) return;
-        if (limb == 6 || !EnablePose.Value) Release(grabber);
+        if (limb == 6 || !EnablePose.Value)
+        {
+            Release(grabber);
+            return;
+        }
         grabber.Limb = -1;
         if (grabber.transform != Limbs[limb].Parent) return;
         if (Debug.Value) MelonLogger.Msg("limb " + Limbs[limb].limb.name + " was posed by " + grabber.transform.name);
