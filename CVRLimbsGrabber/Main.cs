@@ -11,8 +11,8 @@ using System.Linq;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
 [assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbsGrabber", "1.1.1", "Exterrata")]
-[assembly: MelonAdditionalDependencies("DesktopVRSwitch")]
-[assembly: MelonOptionalDependencies("PlayerRagdollMod")]
+[assembly: MelonAdditionalDependencies("DesktopVRIK")]
+[assembly: MelonOptionalDependencies("PlayerRagdollMod", "BTKUILib")]
 [assembly: HarmonyDontPatchAll]
 
 namespace Koneko;
