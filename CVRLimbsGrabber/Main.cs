@@ -10,7 +10,7 @@ using ABI_RC.Core.Util.AssetFiltering;
 using System.Linq;
 
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
-[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbsGrabber", "1.1.0", "Exterrata")]
+[assembly: MelonInfo(typeof(Koneko.LimbGrabber), "CVRLimbsGrabber", "1.1.1", "Exterrata")]
 [assembly: MelonAdditionalDependencies("DesktopVRSwitch")]
 [assembly: MelonOptionalDependencies("PlayerRagdollMod")]
 [assembly: HarmonyDontPatchAll]
