@@ -1,4 +1,7 @@
 # CVRLimbsGrabber
+
+### This repostitory has been merged into https://github.com/Exterrata/CVRMods
+
 Lets your limbs be grabbed in CVR.
 
 fist to grab, thumbs up to pose
